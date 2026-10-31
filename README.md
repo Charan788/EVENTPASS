@@ -30,7 +30,7 @@ At busy events, entry staff often check tickets from screenshots or printouts. T
 
 ## Scope
 
-This is a demo project made for learning. It will not have a real backend, database or payments, and the QR validation will be simple and run in the browser.
+ It will not have a real backend, database or payments, and the QR validation will be simple and run in the browser.
 
 ## Team
 
