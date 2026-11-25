@@ -5,12 +5,13 @@
 
   const Store = {};
   const memory = {};
-  const keys = {
+  const KEYS = {
     events: "eventpass_events",
     passes: "eventpass_passes",
     scans: "eventpass_scans",
     prefs: "eventpass_prefs",
   };
+  const keys = KEYS;
 
   function showStorageWarning() {
     try {
@@ -180,8 +181,15 @@
     Store.initSampleData(true);
   };
 
+  Store.KEYS = KEYS;
+
   Store.getEvents = function () {
     return read(keys.events, []);
+  };
+
+  Store.saveEvents = function (events) {
+    write(keys.events, events);
+    return events;
   };
 
   Store.getEventById = function (eventId) {
@@ -265,6 +273,129 @@
     Store.updateEventCounts(event.eventId, { issuedCount: event.issuedCount + 1 });
 
     return { ok: true, pass: pass };
+  };
+
+  Store.revokePass = function (passId) {
+    const pass = Store.getPassById(passId);
+    if (!pass) return { ok: false, error: "Pass not found." };
+    if (pass.status === "Used") {
+      return { ok: false, error: "Cannot revoke a pass that has already been checked in." };
+    }
+
+    pass.status = "Revoked";
+    Store.savePasses(
+      Store.getPasses().map(function (item) {
+        return item.passId === passId ? pass : item;
+      }),
+    );
+    return { ok: true, pass: pass };
+  };
+
+  Store.reissuePass = function (passId) {
+    const oldPass = Store.getPassById(passId);
+    if (!oldPass) return { ok: false, error: "Original pass not found." };
+    if (oldPass.status === "Used") {
+      return { ok: false, error: "Already used passes cannot be reissued." };
+    }
+
+    const event = Store.getEventById(oldPass.eventId);
+    if (!event) return { ok: false, error: "The event for this pass could not be found." };
+
+    const passes = Store.getPasses();
+    const lastNumber = passes.reduce(function (highest, pass) {
+      const match = String(pass.passId).match(/^PASS-(\d+)$/);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 1000);
+    const newPassId = "PASS-" + String(lastNumber + 1).padStart(4, "0");
+    const newPass = makePass(
+      newPassId,
+      oldPass.eventId,
+      oldPass.attendeeName,
+      oldPass.contact,
+      "Valid",
+      new Date().toISOString(),
+    );
+
+    oldPass.status = "Revoked";
+    const updatedPasses = passes.map(function (pass) {
+      return pass.passId === oldPass.passId ? oldPass : pass;
+    });
+    updatedPasses.unshift(newPass);
+    Store.savePasses(updatedPasses);
+    return { ok: true, oldPass: oldPass, newPass: newPass };
+  };
+
+  Store.getEventStats = function (eventId) {
+    const event = Store.getEventById(eventId);
+    if (!event) {
+      return {
+        capacity: 0,
+        issued: 0,
+        checkedIn: 0,
+        validCount: 0,
+        usedCount: 0,
+        revokedCount: 0,
+        remaining: 0,
+        checkInRate: 0,
+      };
+    }
+
+    const passes = Store.getPasses(eventId);
+    const issued = Number(event.issuedCount) || 0;
+    const checkedIn = Number(event.checkedInCount) || 0;
+    return {
+      capacity: Number(event.capacity) || 0,
+      issued: issued,
+      checkedIn: checkedIn,
+      validCount: passes.filter(function (pass) {
+        return pass.status === "Valid";
+      }).length,
+      usedCount: passes.filter(function (pass) {
+        return pass.status === "Used";
+      }).length,
+      revokedCount: passes.filter(function (pass) {
+        return pass.status === "Revoked";
+      }).length,
+      remaining: Math.max(0, (Number(event.capacity) || 0) - issued),
+      checkInRate: issued ? Math.min(100, Math.round((checkedIn / issued) * 100)) : 0,
+    };
+  };
+
+  Store.buildEventCsv = function (eventId) {
+    const event = Store.getEventById(eventId);
+    const headers = [
+      "Pass ID",
+      "Event ID",
+      "Event Name",
+      "Attendee Name",
+      "Contact",
+      "Status",
+      "Issued At",
+      "Checked In At",
+    ];
+    const rows = Store.getPasses(eventId).map(function (pass) {
+      return [
+        pass.passId,
+        pass.eventId,
+        event ? event.name : "",
+        pass.attendeeName,
+        pass.contact,
+        pass.status,
+        pass.issuedAt,
+        pass.usedAt,
+      ];
+    });
+
+    function quoteCsvCell(value) {
+      return '"' + String(value == null ? "" : value).replace(/"/g, '""') + '"';
+    }
+
+    return [headers]
+      .concat(rows)
+      .map(function (row) {
+        return row.map(quoteCsvCell).join(",");
+      })
+      .join("\r\n");
   };
 
   Store.getPasses = function (eventId) {
