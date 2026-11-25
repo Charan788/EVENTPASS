@@ -78,6 +78,26 @@
     };
   }
 
+  function makeUniquePassId(passes) {
+    const lastNumber = passes.reduce(function (highest, pass) {
+      const match = String(pass.passId).match(/^PASS-(\d+)$/);
+      return match ? Math.max(highest, Number(match[1])) : highest;
+    }, 1000);
+    let number = lastNumber + 1;
+    let passId = "PASS-" + String(number).padStart(4, "0");
+
+    while (
+      passes.some(function (pass) {
+        return pass.passId === passId;
+      })
+    ) {
+      number += 1;
+      passId = "PASS-" + String(number).padStart(4, "0");
+    }
+
+    return passId;
+  }
+
   function makeSampleData() {
     const now = new Date().toISOString();
     const earlier = new Date(Date.now() - 60 * 60 * 1000).toISOString();
@@ -152,6 +172,8 @@
         role: "organizer",
         lastEventId: "EVT-1001",
         sortOrder: "newest",
+        attendeeName: "Aarav Sharma",
+        attendeeContact: "aarav@example.com",
       });
     }
   };
@@ -254,11 +276,7 @@
     }
 
     const passes = Store.getPasses();
-    const lastNumber = passes.reduce(function (highest, pass) {
-      const match = String(pass.passId).match(/^PASS-(\d+)$/);
-      return match ? Math.max(highest, Number(match[1])) : highest;
-    }, 1000);
-    const passId = "PASS-" + String(lastNumber + 1).padStart(4, "0");
+    const passId = makeUniquePassId(passes);
     const pass = makePass(
       passId,
       event.eventId,
@@ -273,6 +291,42 @@
     Store.updateEventCounts(event.eventId, { issuedCount: event.issuedCount + 1 });
 
     return { ok: true, pass: pass };
+  };
+
+  Store.registerForEvent = function (details) {
+    const attendeeName = String(details.attendeeName || "").trim();
+    const contact = String(details.contact || "")
+      .trim()
+      .toLowerCase();
+    const event = Store.getEventById(details.eventId);
+
+    if (!event) return { ok: false, error: "Choose an event that exists." };
+    if (!attendeeName) return { ok: false, error: "Enter your name." };
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contact)) {
+      return { ok: false, error: "Enter a valid email address." };
+    }
+
+    const existingPass = Store.getPasses(event.eventId).find(function (pass) {
+      return (
+        String(pass.contact || "")
+          .trim()
+          .toLowerCase() === contact
+      );
+    });
+
+    if (existingPass && existingPass.status === "Revoked") {
+      const replacement = Store.reissuePass(existingPass.passId);
+      return replacement.ok ? { ok: true, pass: replacement.newPass, reissued: true } : replacement;
+    }
+    if (existingPass) {
+      return { ok: false, error: "You already have a pass for this event.", pass: existingPass };
+    }
+
+    return Store.issuePass({
+      eventId: event.eventId,
+      attendeeName: attendeeName,
+      contact: contact,
+    });
   };
 
   Store.revokePass = function (passId) {
@@ -302,11 +356,7 @@
     if (!event) return { ok: false, error: "The event for this pass could not be found." };
 
     const passes = Store.getPasses();
-    const lastNumber = passes.reduce(function (highest, pass) {
-      const match = String(pass.passId).match(/^PASS-(\d+)$/);
-      return match ? Math.max(highest, Number(match[1])) : highest;
-    }, 1000);
-    const newPassId = "PASS-" + String(lastNumber + 1).padStart(4, "0");
+    const newPassId = makeUniquePassId(passes);
     const newPass = makePass(
       newPassId,
       oldPass.eventId,
@@ -415,6 +465,29 @@
     );
   };
 
+  Store.getPassesForAttendee = function (contact) {
+    const attendeeContact = String(contact || "")
+      .trim()
+      .toLowerCase();
+    if (!attendeeContact) return [];
+
+    return Store.getPasses().filter(function (pass) {
+      return (
+        String(pass.contact || "")
+          .trim()
+          .toLowerCase() === attendeeContact
+      );
+    });
+  };
+
+  Store.getPassForAttendeeEvent = function (eventId, contact) {
+    return (
+      Store.getPassesForAttendee(contact).find(function (pass) {
+        return pass.eventId === eventId;
+      }) || null
+    );
+  };
+
   Store.updateEventCounts = function (eventId, counts) {
     const events = Store.getEvents();
     const event = events.find(function (item) {
@@ -458,11 +531,16 @@
   };
 
   Store.getPrefs = function () {
-    return read(keys.prefs, {
-      role: "organizer",
-      lastEventId: "",
-      sortOrder: "newest",
-    });
+    return Object.assign(
+      {
+        role: "organizer",
+        lastEventId: "",
+        sortOrder: "newest",
+        attendeeName: "Aarav Sharma",
+        attendeeContact: "aarav@example.com",
+      },
+      read(keys.prefs, {}),
+    );
   };
 
   Store.savePrefs = function (partialPrefs) {

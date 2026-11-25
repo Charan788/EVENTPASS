@@ -48,10 +48,23 @@
   }
 
   function syncRoleButton() {
-    const button = document.getElementById("roleSwitch");
-    const isAttendee = window.EventPass.Store.getPrefs().role === "attendee";
-    button.textContent = isAttendee ? "Attendee" : "Event Organizer";
-    button.setAttribute("aria-pressed", String(isAttendee));
+    const role = window.EventPass.Store.getPrefs().role;
+    const caption = document.getElementById("roleCaption");
+    const navHeading = role === "attendee" ? "Attendee space" : "Organizer workspace";
+    document.body.classList.toggle("role-attendee", role === "attendee");
+    document.body.classList.toggle("role-organizer", role !== "attendee");
+
+    document.querySelectorAll("[data-set-role]").forEach(function (button) {
+      const selected = button.getAttribute("data-set-role") === role;
+      button.classList.toggle("active", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    document.querySelectorAll("[data-role-nav]").forEach(function (link) {
+      link.hidden = link.getAttribute("data-role-nav") !== role;
+    });
+    caption.textContent = role === "attendee" ? "Your attendee passes" : "Organizer workspace";
+    document.getElementById("navHeading").textContent = navHeading;
+    document.getElementById("mobileNavHeading").textContent = navHeading;
   }
 
   function stopCamera() {
@@ -83,8 +96,8 @@
     element.innerHTML = "";
     new window.QRCode(element, {
       text: code,
-      width: 180,
-      height: 180,
+      width: 224,
+      height: 224,
       correctLevel: window.QRCode.CorrectLevel.M,
     });
   }
@@ -219,15 +232,42 @@
     const role = window.EventPass.Store.getPrefs().role;
     if (role === "attendee" && organizerRoutes.indexOf(activeRoute) !== -1) {
       target.innerHTML = views.renderRoleGuard(routeLabels[activeRoute]);
-    } else if (activeRoute === "home") target.innerHTML = views.renderHome();
-    else if (activeRoute === "events") target.innerHTML = views.renderEventList();
+    } else if (activeRoute === "home") target.innerHTML = views.renderHome(role);
+    else if (activeRoute === "browse-events") {
+      target.innerHTML = views.renderBrowseEvents(
+        window.EventPass.Store.getPrefs().attendeeContact,
+      );
+    } else if (activeRoute === "register-event") {
+      const prefs = window.EventPass.Store.getPrefs();
+      target.innerHTML = views.renderRegistration(
+        prefs.lastEventId,
+        prefs.attendeeName,
+        prefs.attendeeContact,
+      );
+    } else if (activeRoute === "events") target.innerHTML = views.renderEventList();
     else if (activeRoute === "create-event") target.innerHTML = views.renderEventForm();
     else if (activeRoute === "edit-event") {
       target.innerHTML = views.renderEventForm(window.EventPass.Store.getPrefs().lastEventId);
     } else if (activeRoute === "issue-passes") target.innerHTML = views.renderIssuePasses();
     else if (activeRoute === "attendee-pass") {
-      target.innerHTML = views.renderAttendeePass();
-      if (requestedPassId) showPass(requestedPassId);
+      const prefs = window.EventPass.Store.getPrefs();
+      const contact = prefs.attendeeContact;
+      const visiblePasses =
+        prefs.role === "organizer"
+          ? window.EventPass.Store.getPasses()
+          : window.EventPass.Store.getPassesForAttendee(contact);
+      target.innerHTML = views.renderAttendeePass(requestedPassId, contact, prefs.role);
+      if (
+        requestedPassId &&
+        visiblePasses.some(function (pass) {
+          return pass.passId === requestedPassId;
+        })
+      )
+        showPass(requestedPassId);
+      else if (!requestedPassId) {
+        const firstPass = visiblePasses[0];
+        if (firstPass) showPass(firstPass.passId);
+      }
     } else if (activeRoute === "scanner") target.innerHTML = views.renderScanner();
     else if (activeRoute === "dashboard") {
       const events = window.EventPass.Store.getEvents();
@@ -245,7 +285,7 @@
       }
       target.innerHTML = views.renderDashboard(dashboardEventId, dashboardFilters);
     } else if (activeRoute === "about") target.innerHTML = views.renderAbout();
-    else target.innerHTML = views.renderHome();
+    else target.innerHTML = views.renderHome(role);
 
     document.querySelectorAll("[data-route]").forEach(function (link) {
       link.classList.toggle("active", link.getAttribute("data-route") === activeRoute);
@@ -317,12 +357,14 @@
 
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       message.textContent =
-        "This browser cannot open a camera here. Paste the pass code into the field instead.";
+        "This browser cannot open a camera here. Manual code entry is ready below.";
+      document.querySelector(".manual-entry").open = true;
       return;
     }
     if (!window.BarcodeDetector) {
       message.textContent =
-        "Camera QR reading is not supported by this browser. Paste the pass code instead.";
+        "Camera QR reading is not supported here. Manual code entry is ready below.";
+      document.querySelector(".manual-entry").open = true;
       return;
     }
 
@@ -343,7 +385,8 @@
     } catch (error) {
       stopCamera();
       message.textContent =
-        "The camera could not be opened. Check browser permission or enter the code manually.";
+        "The camera could not be opened. Check browser permission or use the code entry below.";
+      document.querySelector(".manual-entry").open = true;
     }
   }
 
@@ -365,6 +408,7 @@
       document.getElementById("cameraMessage").textContent =
         "Camera reading failed. You can enter the pass code manually.";
       stopCamera();
+      document.querySelector(".manual-entry").open = true;
       return;
     }
 
@@ -373,6 +417,26 @@
 
   function attachEvents() {
     document.addEventListener("click", function (event) {
+      const roleButton = event.target.closest("[data-set-role]");
+      if (roleButton) {
+        const nextRole = roleButton.getAttribute("data-set-role");
+        if (window.EventPass.Store.getPrefs().role !== nextRole) {
+          window.EventPass.Store.savePrefs({ role: nextRole });
+          window.location.hash = "home";
+          render("home");
+        }
+        return;
+      }
+
+      const registerButton = event.target.closest("[data-register-event]");
+      if (registerButton) {
+        const eventId = registerButton.getAttribute("data-register-event");
+        window.EventPass.Store.savePrefs({ lastEventId: eventId, role: "attendee" });
+        window.location.hash = "register-event";
+        render("register-event");
+        return;
+      }
+
       const routeLink = event.target.closest("[data-route]");
       if (routeLink) {
         event.preventDefault();
@@ -413,7 +477,34 @@
       }
 
       const passButton = event.target.closest("[data-show-pass]");
-      if (passButton) showPass(passButton.getAttribute("data-show-pass"));
+      if (passButton) {
+        const passId = passButton.getAttribute("data-show-pass");
+        const role = window.EventPass.Store.getPrefs().role;
+        const pass = window.EventPass.Store.getPassById(passId);
+        if (
+          role === "attendee" &&
+          !window.EventPass.Store.getPassesForAttendee(
+            window.EventPass.Store.getPrefs().attendeeContact,
+          ).some(function (item) {
+            return item.passId === passId;
+          })
+        )
+          return;
+        if (currentRoute === "attendee-pass") showPass(passId);
+        else {
+          requestedPassId = passId;
+          if (pass) window.EventPass.Store.savePrefs({ lastEventId: pass.eventId });
+          window.location.hash = "attendee-pass";
+          render("attendee-pass");
+        }
+      }
+
+      const openPassButton = event.target.closest("[data-open-pass]");
+      if (openPassButton) {
+        requestedPassId = openPassButton.getAttribute("data-open-pass");
+        window.location.hash = "attendee-pass";
+        render("attendee-pass");
+      }
 
       const resetButton = event.target.closest("[data-reset-demo]");
       if (
@@ -460,6 +551,11 @@
         render("attendee-pass");
       }
 
+      if (event.target.closest("[data-reset-filters]")) {
+        dashboardFilters = { search: "", status: "All" };
+        render("dashboard");
+      }
+
       if (event.target.closest("#exportCsv")) exportEventCsv();
 
       const filterButton = event.target.closest("[data-status-filter]");
@@ -470,14 +566,6 @@
 
       if (event.target.closest("#startCamera")) startCamera();
       if (event.target.closest("#stopCamera")) stopCamera();
-    });
-
-    document.getElementById("roleSwitch").addEventListener("click", function () {
-      const nextRole =
-        window.EventPass.Store.getPrefs().role === "organizer" ? "attendee" : "organizer";
-      window.EventPass.Store.savePrefs({ role: nextRole });
-      syncRoleButton();
-      if (organizerRoutes.indexOf(currentRoute) !== -1) render(currentRoute);
     });
 
     document.addEventListener("submit", function (event) {
@@ -510,6 +598,40 @@
         event.target.reset();
         document.getElementById("passEvent").value = values.eventId;
         showIssuedPass(result.pass);
+      }
+
+      if (event.target.id === "registerEventForm") {
+        event.preventDefault();
+        const form = event.target;
+        const values = Object.fromEntries(new FormData(form).entries());
+        values.eventId = form.getAttribute("data-event-id");
+        values.attendeeName = String(values.attendeeName || "").trim();
+        values.contact = String(values.contact || "")
+          .trim()
+          .toLowerCase();
+        const nameError = document.getElementById("registerNameError");
+        const emailError = document.getElementById("registerEmailError");
+        const error = document.getElementById("registerError");
+        nameError.textContent = values.attendeeName ? "" : "Enter your name.";
+        emailError.textContent = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.contact)
+          ? ""
+          : "Enter a valid email address.";
+        if (nameError.textContent || emailError.textContent) return;
+
+        const result = window.EventPass.Store.registerForEvent(values);
+        if (!result.ok) {
+          error.textContent = result.error;
+          return;
+        }
+        window.EventPass.Store.savePrefs({
+          attendeeName: values.attendeeName,
+          attendeeContact: values.contact,
+          role: "attendee",
+        });
+        requestedPassId = result.pass.passId;
+        window.location.hash = "attendee-pass";
+        render("attendee-pass");
+        showAlert("Your pass is ready. Its code is " + result.pass.passId + ".", "success");
       }
 
       if (event.target.id === "scanForm") {

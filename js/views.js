@@ -23,427 +23,362 @@
     );
   }
 
-  function eventOptions(selectedId) {
-    return window.EventPass.Store.getEvents()
-      .map(function (event) {
-        const selected = event.eventId === selectedId ? " selected" : "";
-        return (
-          '<option value="' +
-          escapeHtml(event.eventId) +
-          '"' +
-          selected +
-          ">" +
-          escapeHtml(event.name) +
-          "</option>"
-        );
-      })
-      .join("");
+  function pageHeading(title, description, action) {
+    return `
+      <header class="page-heading">
+        <div>
+          <h1>${escapeHtml(title)}</h1>
+          <p>${escapeHtml(description)}</p>
+        </div>
+        ${action || ""}
+      </header>`;
   }
 
-  function eventCard(event) {
+  function statusPill(status) {
+    const className = String(status || "invalid")
+      .toLowerCase()
+      .replace(/\s/g, "-");
+    return `<span class="status-pill status-${escapeHtml(className)}">${escapeHtml(status)}</span>`;
+  }
+
+  function eventRow(event, includeActions) {
     const percent =
       event.capacity > 0
         ? Math.min(100, Math.round((event.issuedCount / event.capacity) * 100))
         : 0;
-    return (
-      '<div class="col-12 col-xl-6"><article class="event-card">' +
-      '<div class="d-flex justify-content-between gap-3"><div><p class="small text-secondary mb-1">' +
-      escapeHtml(event.eventId) +
-      "</p><h3>" +
-      escapeHtml(event.name) +
-      "</h3></div>" +
-      '<span class="badge text-bg-light">' +
-      escapeHtml(event.issuedCount) +
-      " / " +
-      escapeHtml(event.capacity) +
-      " issued</span></div>" +
-      '<p class="event-meta mb-2"><i class="bi bi-calendar3 me-2"></i>' +
-      escapeHtml(formatDate(event.date)) +
-      '</p><p class="event-meta">' +
-      '<i class="bi bi-geo-alt me-2"></i>' +
-      escapeHtml(event.venue) +
-      "</p>" +
-      '<div class="d-flex justify-content-between small mb-1"><span>Passes issued</span><span>' +
-      percent +
-      '%</span></div><div class="progress" role="progressbar" aria-label="Passes issued" ' +
-      'aria-valuenow="' +
-      percent +
-      '" aria-valuemin="0" aria-valuemax="100">' +
-      '<div class="progress-bar" style="width: ' +
-      percent +
-      '%"></div></div>' +
-      '<p class="small text-secondary mt-2">' +
-      escapeHtml(event.checkedInCount) +
-      " checked in</p>" +
-      '<div class="event-actions"><button class="btn btn-sm btn-outline-secondary" data-edit-event="' +
-      escapeHtml(event.eventId) +
-      '">Edit</button><button class="btn btn-sm btn-primary" data-go="issue-passes" ' +
-      'data-event-id="' +
-      escapeHtml(event.eventId) +
-      '">Issue passes</button>' +
-      '<button class="btn btn-sm btn-outline-primary" data-go="scanner" data-event-id="' +
-      escapeHtml(event.eventId) +
-      '">Scanner</button><button class="btn btn-sm btn-outline-primary" ' +
-      'data-go="dashboard" data-event-id="' +
-      escapeHtml(event.eventId) +
-      '">Dashboard</button></div>' +
-      "</article></div>"
-    );
+    const actions = includeActions
+      ? `<div class="row-actions">
+          <button class="text-button" type="button" data-edit-event="${escapeHtml(event.eventId)}">Edit</button>
+          <button class="text-button" type="button" data-go="issue-passes" data-event-id="${escapeHtml(event.eventId)}">Issue passes</button>
+          <button class="text-button" type="button" data-go="scanner" data-event-id="${escapeHtml(event.eventId)}">Scan</button>
+          <button class="text-button" type="button" data-go="dashboard" data-event-id="${escapeHtml(event.eventId)}">Details</button>
+        </div>`
+      : "";
+
+    return `
+      <article class="event-row">
+        <div class="event-date"><span>${escapeHtml(new Intl.DateTimeFormat(undefined, { month: "short" }).format(new Date(event.date)))}</span><strong>${escapeHtml(new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(new Date(event.date)))}</strong></div>
+        <div class="event-description">
+          <h3>${escapeHtml(event.name)}</h3>
+          <p>${escapeHtml(formatDate(event.date))} · ${escapeHtml(event.venue)}</p>
+          <div class="capacity-line"><span>${event.issuedCount} of ${event.capacity} passes issued</span><span>${percent}%</span></div>
+          <div class="progress" role="progressbar" aria-label="Passes issued" aria-valuenow="${percent}" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: ${percent}%"></div></div>
+        </div>
+        <div class="event-checkins"><strong>${event.checkedInCount}</strong><span>checked in</span></div>
+        ${actions}
+      </article>`;
   }
 
-  function pageHeading(title, description, action) {
-    return (
-      '<div class="page-heading d-flex flex-column flex-md-row justify-content-between ' +
-      'align-items-md-end gap-3"><div><h1 class="h2 mb-0">' +
-      escapeHtml(title) +
-      "</h1><p>" +
-      escapeHtml(description) +
-      "</p></div>" +
-      (action || "") +
-      "</div>"
-    );
+  function attendeeEventRow(event, contact) {
+    const pass = window.EventPass.Store.getPassForAttendeeEvent(event.eventId, contact);
+    const remaining = Math.max(0, Number(event.capacity) - Number(event.issuedCount));
+    let action;
+
+    if (pass && pass.status !== "Revoked") {
+      action = `<button class="text-button" type="button" data-view-pass="${escapeHtml(pass.passId)}">View pass</button>`;
+    } else if (remaining > 0) {
+      action = `<button class="text-button primary-link" type="button" data-register-event="${escapeHtml(event.eventId)}">${pass ? "Get a replacement" : "Register"}</button>`;
+    } else {
+      action = '<span class="availability full">Full</span>';
+    }
+
+    return `
+      <article class="attendee-event-row">
+        <div class="event-date"><span>${escapeHtml(new Intl.DateTimeFormat(undefined, { month: "short" }).format(new Date(event.date)))}</span><strong>${escapeHtml(new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(new Date(event.date)))}</strong></div>
+        <div class="event-description">
+          <h3>${escapeHtml(event.name)}</h3>
+          <p>${escapeHtml(formatDate(event.date))} · ${escapeHtml(event.venue)}</p>
+          <span class="availability">${remaining} spots left</span>
+        </div>
+        <div class="attendee-row-action">${action}</div>
+      </article>`;
+  }
+
+  function passRow(pass) {
+    const event = window.EventPass.Store.getEventById(pass.eventId);
+    const eventName = event ? event.name : pass.eventId;
+    return `
+      <article class="pass-row">
+        <div class="pass-row-main">
+          <span class="pass-mark" aria-hidden="true">EP</span>
+          <div><h3>${escapeHtml(eventName)}</h3><p>${escapeHtml(pass.passId)} · ${escapeHtml(formatDate(event ? event.date : pass.issuedAt))}</p></div>
+        </div>
+        ${statusPill(pass.status)}
+        <button class="text-button" type="button" data-show-pass="${escapeHtml(pass.passId)}">Open pass</button>
+      </article>`;
   }
 
   const Views = {};
 
-  Views.renderHome = function () {
-    const events = window.EventPass.Store.getEvents();
-    const capacity = events.reduce(function (sum, event) {
-      return sum + Number(event.capacity || 0);
-    }, 0);
-    const passes = window.EventPass.Store.getPasses().length;
+  Views.renderHome = function (role) {
+    if (role === "attendee") {
+      const prefs = window.EventPass.Store.getPrefs();
+      const events = window.EventPass.Store.getEvents();
+      const passes = window.EventPass.Store.getPassesForAttendee(prefs.attendeeContact);
+      const upcomingEvents = events.filter(function (event) {
+        return new Date(event.date).getTime() >= Date.now();
+      });
 
-    return (
-      '<section class="hero mb-4"><p class="text-uppercase small fw-bold mb-2">EventPass v2.0</p>' +
-      "<h1>Make every event easier to run.</h1><p>Manage events, create attendee passes, and check people in at the door.</p>" +
-      '<a class="btn btn-primary" href="#events" data-route="events">View your events</a></section>' +
-      '<section class="mb-4"><h2 class="h4 mb-3">Choose where to start</h2><div class="row g-3">' +
-      '<div class="col-12 col-md-6"><a class="role-card" href="#events" data-route="events" data-role="organizer">' +
-      '<i class="bi bi-calendar2-check"></i><h3 class="h5 mt-3">Continue as Event Organizer</h3>' +
-      '<p class="mb-0 text-secondary">Manage events, issue passes, and scan attendees.</p></a></div>' +
-      '<div class="col-12 col-md-6"><a class="role-card" href="#attendee-pass" data-route="attendee-pass" data-role="attendee">' +
-      '<i class="bi bi-person-vcard"></i><h3 class="h5 mt-3">View Attendee Pass</h3>' +
-      '<p class="mb-0 text-secondary">Open a sample pass and its QR code.</p></a></div></div></section>' +
-      '<section aria-label="Event summary"><div class="row g-3">' +
-      '<div class="col-12 col-sm-4"><div class="stat-card"><p class="stat-label">Total Events</p>' +
-      '<p class="stat-value">' +
-      events.length +
-      "</p></div></div>" +
-      '<div class="col-12 col-sm-4"><div class="stat-card"><p class="stat-label">Total Capacity</p>' +
-      '<p class="stat-value">' +
-      capacity +
-      "</p></div></div>" +
-      '<div class="col-12 col-sm-4"><div class="stat-card"><p class="stat-label">Passes Issued</p>' +
-      '<p class="stat-value">' +
-      passes +
-      "</p></div></div></div></section>" +
-      '<button class="btn btn-outline-secondary mt-4" type="button" data-reset-demo>Reset Sample Data</button>'
+      return `
+        ${pageHeading(`Hello, ${prefs.attendeeName}`, "Your events and tickets, in one place.", '<a class="button button-secondary" href="#browse-events" data-route="browse-events">Find an event</a>')}
+        <section class="section-block">
+          <div class="section-heading"><div><h2>My passes</h2><p>${passes.length} ${passes.length === 1 ? "ticket" : "tickets"} saved</p></div><a class="text-button" href="#attendee-pass" data-route="attendee-pass">View all passes</a></div>
+          <div class="pass-list">${passes.length ? passes.slice(0, 3).map(passRow).join("") : '<p class="empty-line">You have no passes yet. Browse events and register for one.</p>'}</div>
+        </section>
+        <section class="section-block">
+          <div class="section-heading"><div><h2>Events coming up</h2><p>There are ${upcomingEvents.length} upcoming ${upcomingEvents.length === 1 ? "event" : "events"}.</p></div><a class="text-button" href="#browse-events" data-route="browse-events">Browse events</a></div>
+          <div class="attendee-event-list">${
+            upcomingEvents
+              .slice(0, 4)
+              .map(function (event) {
+                return attendeeEventRow(event, prefs.attendeeContact);
+              })
+              .join("") || '<p class="empty-line">No upcoming events are listed right now.</p>'
+          }</div>
+        </section>`;
+    }
+
+    const events = window.EventPass.Store.getEvents();
+    const stats = events.reduce(
+      function (summary, event) {
+        summary.capacity += Number(event.capacity) || 0;
+        summary.issued += Number(event.issuedCount) || 0;
+        summary.checkedIn += Number(event.checkedInCount) || 0;
+        return summary;
+      },
+      { capacity: 0, issued: 0, checkedIn: 0 },
     );
+    const action =
+      '<a class="button button-primary" href="#create-event" data-route="create-event">Create event</a>';
+
+    return `
+      ${pageHeading("Organizer dashboard", "A quick view of your events and arrivals.", action)}
+      <section class="summary-strip" aria-label="Event totals">
+        <div><span>Events</span><strong>${events.length}</strong></div>
+        <div><span>Passes issued</span><strong>${stats.issued}</strong></div>
+        <div><span>Checked in</span><strong>${stats.checkedIn}</strong></div>
+        <div><span>Total capacity</span><strong>${stats.capacity}</strong></div>
+      </section>
+      <section class="section-block">
+        <div class="section-heading"><div><h2>Your events</h2><p>Check ticket sales and arrivals.</p></div><a class="text-button" href="#events" data-route="events">All events</a></div>
+        <div class="event-list">${
+          events.length
+            ? events
+                .map(function (event) {
+                  return eventRow(event, true);
+                })
+                .join("")
+            : '<p class="empty-line">No events yet. Create an event to get started.</p>'
+        }</div>
+      </section>`;
+  };
+
+  Views.renderBrowseEvents = function (attendeeContact) {
+    const events = window.EventPass.Store.getEvents()
+      .slice()
+      .sort(function (left, right) {
+        return new Date(left.date) - new Date(right.date);
+      });
+
+    return `
+      ${pageHeading("Find an event", "Browse the upcoming events and save a pass.")}
+      <section class="section-block">
+        <div class="attendee-event-list">${
+          events.length
+            ? events
+                .map(function (event) {
+                  return attendeeEventRow(event, attendeeContact);
+                })
+                .join("")
+            : '<p class="empty-line">No events are listed yet. Check back later.</p>'
+        }</div>
+      </section>`;
+  };
+
+  Views.renderRegistration = function (eventId, attendeeName, contact) {
+    const event = window.EventPass.Store.getEventById(eventId);
+    if (!event) {
+      return `${pageHeading("Register for an event", "Choose an event from the list.")}<p class="empty-line">This event could not be found.</p><a class="text-button" href="#browse-events" data-route="browse-events">Back to events</a>`;
+    }
+
+    const remaining = Math.max(0, Number(event.capacity) - Number(event.issuedCount));
+    return `
+      ${pageHeading("Register for an event", "Enter your details and we’ll prepare your pass.")}
+      <section class="registration-layout">
+        <div class="registration-event">
+          <p class="eyebrow">SELECTED EVENT</p>
+          <h2>${escapeHtml(event.name)}</h2>
+          <p>${escapeHtml(formatDate(event.date))}</p>
+          <p>${escapeHtml(event.venue)}</p>
+          <p>${remaining} spots left</p>
+        </div>
+        <form id="registerEventForm" class="form-panel" novalidate data-event-id="${escapeHtml(event.eventId)}">
+          <div class="form-field"><label for="registerName">Your name</label><input id="registerName" name="attendeeName" value="${escapeHtml(attendeeName)}" autocomplete="name" required><p class="field-error" id="registerNameError" aria-live="polite"></p></div>
+          <div class="form-field"><label for="registerEmail">Email address</label><input id="registerEmail" name="contact" type="email" value="${escapeHtml(contact)}" autocomplete="email" required><p class="field-error" id="registerEmailError" aria-live="polite"></p></div>
+          <p class="form-note">This demo saves your pass in this browser.</p>
+          <div class="form-actions"><button class="button button-primary" type="submit"${remaining ? "" : " disabled"}>${remaining ? "Register and get pass" : "Event is full"}</button><a class="text-button" href="#browse-events" data-route="browse-events">Cancel</a></div>
+          <p id="registerError" class="field-error" role="alert"></p>
+        </form>
+      </section>`;
   };
 
   Views.renderEventList = function () {
     const events = window.EventPass.Store.getEvents();
-    const action =
-      '<a class="btn btn-primary" href="#create-event" data-route="create-event">' +
-      '<i class="bi bi-plus-lg me-1"></i>Create event</a>';
-    const heading = pageHeading("Events", "View and manage your event details.", action);
-
-    if (events.length === 0) {
-      return (
-        heading +
-        '<div class="empty-state"><i class="bi bi-calendar-plus"></i>' +
-        '<h2 class="h4 mt-3">No events yet</h2><p class="text-secondary">Create an event to get started.</p>' +
-        '<a class="btn btn-primary" href="#create-event" data-route="create-event">Create First Event</a></div>'
-      );
-    }
-
-    return heading + '<div class="row g-3">' + events.map(eventCard).join("") + "</div>";
+    return `
+      ${pageHeading("Events", "Manage event details, tickets, and check-in.", '<a class="button button-primary" href="#create-event" data-route="create-event">Create event</a>')}
+      <section class="section-block">
+        <div class="event-list">${
+          events.length
+            ? events
+                .map(function (event) {
+                  return eventRow(event, true);
+                })
+                .join("")
+            : '<div class="empty-state"><h2>No events yet</h2><p>Create an event to start issuing passes.</p><a class="button button-primary" href="#create-event" data-route="create-event">Create event</a></div>'
+        }</div>
+      </section>`;
   };
 
   Views.renderEventForm = function (editEventId) {
     const event = editEventId ? window.EventPass.Store.getEventById(editEventId) : null;
     const title = event ? "Edit event" : "Create an event";
 
-    return (
-      pageHeading(title, "Add the basic details people need to find your event.") +
-      '<section class="content-card"><form id="eventForm" novalidate data-event-id="' +
-      escapeHtml(event ? event.eventId : "") +
-      '"><div class="mb-3"><label class="form-label" ' +
-      'for="eventName">Event Name</label><input class="form-control" id="eventName" name="name" ' +
-      'required maxlength="120" value="' +
-      escapeHtml(event ? event.name : "") +
-      '">' +
-      '<div class="field-error" id="nameError" aria-live="polite"></div></div>' +
-      '<div class="mb-3"><label class="form-label" for="eventDate">Date &amp; Time</label>' +
-      '<input class="form-control" id="eventDate" name="date" type="datetime-local" required value="' +
-      escapeHtml(event ? event.date : "") +
-      '"><div class="field-error" id="dateError" aria-live="polite"></div></div>' +
-      '<div class="mb-3"><label class="form-label" for="eventVenue">Venue</label><input class="form-control" ' +
-      'id="eventVenue" name="venue" required maxlength="160" value="' +
-      escapeHtml(event ? event.venue : "") +
-      '"><div class="field-error" id="venueError" aria-live="polite"></div></div>' +
-      '<div class="mb-3"><label class="form-label" for="eventCapacity">Capacity</label><input ' +
-      'class="form-control" id="eventCapacity" name="capacity" type="number" min="1" step="1" ' +
-      'required value="' +
-      escapeHtml(event ? event.capacity : "") +
-      '">' +
-      '<div class="field-error" id="capacityError" aria-live="polite"></div></div>' +
-      '<div class="d-flex flex-wrap gap-2"><button class="btn btn-primary" type="submit">Save event</button>' +
-      '<a class="btn btn-outline-secondary" href="#events" data-route="events">Cancel</a></div></form></section>'
-    );
+    return `
+      ${pageHeading(title, "Add the details attendees need.")}
+      <form id="eventForm" class="form-panel form-narrow" novalidate data-event-id="${escapeHtml(event ? event.eventId : "")}">
+        <div class="form-field"><label for="eventName">Event name</label><input id="eventName" name="name" maxlength="120" value="${escapeHtml(event ? event.name : "")}" required><p class="field-error" id="nameError" aria-live="polite"></p></div>
+        <div class="form-field"><label for="eventDate">Date and time</label><input id="eventDate" name="date" type="datetime-local" value="${escapeHtml(event ? event.date : "")}" required><p class="field-error" id="dateError" aria-live="polite"></p></div>
+        <div class="form-field"><label for="eventVenue">Venue</label><input id="eventVenue" name="venue" maxlength="160" value="${escapeHtml(event ? event.venue : "")}" required><p class="field-error" id="venueError" aria-live="polite"></p></div>
+        <div class="form-field"><label for="eventCapacity">Capacity</label><input id="eventCapacity" name="capacity" type="number" min="1" step="1" value="${escapeHtml(event ? event.capacity : "")}" required><p class="field-error" id="capacityError" aria-live="polite"></p></div>
+        <div class="form-actions"><button class="button button-primary" type="submit">Save event</button><a class="text-button" href="#events" data-route="events">Cancel</a></div>
+      </form>`;
   };
 
   Views.renderIssuePasses = function () {
     const events = window.EventPass.Store.getEvents();
-    const selectedEventId =
-      window.EventPass.Store.getPrefs().lastEventId || (events[0] && events[0].eventId);
-
-    return (
-      pageHeading("Issue passes", "Create a single-use pass for an attendee.") +
-      '<div class="row g-3"><div class="col-12 col-lg-7"><section class="content-card">' +
-      (events.length
-        ? '<form id="issuePassForm"><div class="mb-3"><label class="form-label" for="passEvent">Event</label>' +
-          '<select class="form-select" id="passEvent" name="eventId" required>' +
-          eventOptions(selectedEventId) +
-          "</select></div>" +
-          '<div class="mb-3"><label class="form-label" for="attendeeName">Attendee name</label>' +
-          '<input class="form-control" id="attendeeName" name="attendeeName" required maxlength="120"></div>' +
-          '<div class="mb-3"><label class="form-label" for="attendeeContact">Email or contact (optional)</label>' +
-          '<input class="form-control" id="attendeeContact" name="contact" maxlength="160"></div>' +
-          '<button class="btn btn-primary" type="submit">Create pass</button></form>'
-        : '<p class="mb-0">Create an event before issuing passes.</p>') +
-      '<div id="issueMessage" class="mt-3" aria-live="polite"></div></section></div>' +
-      '<div class="col-12 col-lg-5"><section class="content-card"><h2 class="h5">Issued pass</h2>' +
-      '<div id="issuedPass" class="text-secondary">The new pass will appear here.</div></section></div></div>'
-    );
-  };
-
-  Views.renderAttendeePass = function () {
-    const passes = window.EventPass.Store.getPasses();
-    const passCards = passes
-      .map(function (pass) {
-        const event = window.EventPass.Store.getEventById(pass.eventId);
-        return (
-          '<button type="button" class="pass-choice" data-show-pass="' +
-          escapeHtml(pass.passId) +
-          '">' +
-          "<span><strong>" +
-          escapeHtml(pass.attendeeName) +
-          "</strong><small>" +
-          escapeHtml(event ? event.name : pass.eventId) +
-          '</small></span><span class="status-pill status-' +
-          escapeHtml(pass.status.toLowerCase().replace(/\s/g, "-")) +
-          '">' +
-          escapeHtml(pass.status) +
-          "</span></button>"
-        );
+    const selectedId = window.EventPass.Store.getPrefs().lastEventId;
+    const options = events
+      .map(function (event) {
+        return `<option value="${escapeHtml(event.eventId)}"${event.eventId === selectedId ? " selected" : ""}>${escapeHtml(event.name)}</option>`;
       })
       .join("");
 
-    return (
-      pageHeading("Attendee pass", "Choose a sample pass to view its QR code.") +
-      '<div class="row g-3"><div class="col-12 col-lg-5"><section class="content-card">' +
-      '<h2 class="h5">Sample passes</h2><div class="pass-list">' +
-      passCards +
-      "</div></section></div>" +
-      '<div class="col-12 col-lg-7"><section id="passDetails" class="content-card text-secondary">Select a pass to show its details.</section></div></div>'
-    );
+    return `
+      ${pageHeading("Issue passes", "Create a single-use pass for an attendee.")}
+      ${
+        events.length
+          ? `<form id="issuePassForm" class="form-panel form-narrow">
+        <div class="form-field"><label for="passEvent">Event</label><select id="passEvent" name="eventId" required>${options}</select></div>
+        <div class="form-field"><label for="attendeeName">Attendee name</label><input id="attendeeName" name="attendeeName" maxlength="120" required></div>
+        <div class="form-field"><label for="attendeeContact">Email or contact</label><input id="attendeeContact" name="contact" maxlength="160"></div>
+        <div class="form-actions"><button class="button button-primary" type="submit">Issue pass</button></div>
+        <div id="issueMessage" aria-live="polite"></div>
+        <div id="issuedPass" class="issued-pass"></div>
+      </form>`
+          : '<p class="empty-line">Create an event before issuing passes.</p>'
+      }`;
+  };
+
+  Views.renderAttendeePass = function (selectedPassId, attendeeContact, role) {
+    const organizerView = role === "organizer";
+    const passes = organizerView
+      ? window.EventPass.Store.getPasses()
+      : window.EventPass.Store.getPassesForAttendee(attendeeContact);
+    const passList = passes
+      .map(function (pass) {
+        const event = window.EventPass.Store.getEventById(pass.eventId);
+        return `<button class="pass-choice${pass.passId === selectedPassId ? " active" : ""}" type="button" data-show-pass="${escapeHtml(pass.passId)}"><span><strong>${escapeHtml(event ? event.name : pass.eventId)}</strong><small>${escapeHtml(pass.passId)}</small></span>${statusPill(pass.status)}</button>`;
+      })
+      .join("");
+
+    return `
+      ${pageHeading(organizerView ? "Pass details" : "My passes", organizerView ? "Review a pass QR code." : "Show your pass at the entrance. The first valid scan checks you in.", organizerView ? '<a class="text-button" href="#dashboard" data-route="dashboard">Back to dashboard</a>' : '<a class="text-button" href="#browse-events" data-route="browse-events">Find another event</a>')}
+      ${passes.length ? `<div class="passes-layout"><section class="pass-list" aria-label="Your passes">${passList}</section><section id="passDetails" class="pass-details">Choose a pass to view its QR code.</section></div>` : '<div class="empty-state"><h2>No passes yet</h2><p>Find an event and register to get your first pass.</p><a class="button button-primary" href="#browse-events" data-route="browse-events">Browse events</a></div>'}`;
   };
 
   Views.renderScanner = function () {
     const events = window.EventPass.Store.getEvents();
-    const selectedEventId =
-      window.EventPass.Store.getPrefs().lastEventId || (events[0] && events[0].eventId);
+    const selectedId = window.EventPass.Store.getPrefs().lastEventId;
+    const options = events
+      .map(function (event) {
+        return `<option value="${escapeHtml(event.eventId)}"${event.eventId === selectedId ? " selected" : ""}>${escapeHtml(event.name)}</option>`;
+      })
+      .join("");
 
-    return (
-      pageHeading("Pass scanner", "Choose the event, then scan a pass or enter its code.") +
-      '<div class="row g-3"><div class="col-12 col-lg-7"><section class="content-card">' +
-      (events.length
-        ? '<div class="mb-3"><label class="form-label" for="scanEvent">Active event</label>' +
-          '<select class="form-select" id="scanEvent">' +
-          eventOptions(selectedEventId) +
-          "</select></div>"
-        : "<p>Create an event before scanning passes.</p>") +
-      '<form id="scanForm"><label class="form-label" for="scanCode">Pass code</label>' +
-      '<textarea class="form-control scan-code" id="scanCode" rows="3" placeholder="EP1|EVT-1001|PASS-1001|…" ' +
-      'autocomplete="off" spellcheck="false"></textarea><div class="d-flex flex-wrap gap-2 mt-3">' +
-      '<button class="btn btn-primary" type="submit">Check in pass</button>' +
-      '<button class="btn btn-outline-primary" id="startCamera" type="button">Use camera</button>' +
-      '<button class="btn btn-outline-secondary d-none" id="stopCamera" type="button">Stop camera</button></div></form>' +
-      '<p id="cameraMessage" class="small text-secondary mt-3 mb-0" aria-live="polite">Camera scanning needs browser permission and a secure connection (HTTPS or localhost).</p>' +
-      '<video id="cameraPreview" class="camera-preview d-none" playsinline muted></video></section></div>' +
-      '<div class="col-12 col-lg-5"><section class="content-card"><h2 class="h5">Scan result</h2>' +
-      '<div id="scanResult" class="scan-result scan-empty" aria-live="polite" role="status">No pass scanned yet.</div>' +
-      '<div id="scanHistory" class="mt-3"></div></section></div></div>'
-    );
+    return `
+      ${pageHeading("Check in", "Scan a pass or enter its code. Each valid pass works once.")}
+      <div class="scanner-layout">
+        <section class="scanner-panel">
+          <div class="form-field"><label for="scanEvent">Event</label><select id="scanEvent"${events.length ? "" : " disabled"}>${options || '<option value="">No events yet</option>'}</select></div>
+          <div class="camera-stage"><video id="cameraPreview" class="camera-preview d-none" playsinline muted></video><div id="cameraPrompt" class="camera-prompt"><span class="camera-symbol" aria-hidden="true">QR</span><p>Hold the attendee’s QR code in front of the camera.</p></div></div>
+          <div class="scanner-actions"><button class="button button-primary" id="startCamera" type="button"${events.length ? "" : " disabled"}>Start camera</button><button class="button button-secondary d-none" id="stopCamera" type="button">Stop camera</button></div>
+          <p id="cameraMessage" class="form-note" aria-live="polite">Camera access works on HTTPS or localhost. You can also enter the pass code below.</p>
+          <details class="manual-entry"><summary>Enter a pass code instead</summary><form id="scanForm" class="pt-3"><div class="form-field"><label for="scanCode">Pass code</label><textarea id="scanCode" rows="3" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="EP1|EVT-1001|PASS-1001|…"></textarea></div><button class="button button-secondary" type="submit">Check pass</button></form></details>
+        </section>
+        <aside class="scan-side"><h2>Latest scan</h2><div id="scanResult" class="scan-result scan-empty" aria-live="polite" role="status"><strong>Ready</strong><p>Scan or enter a pass code.</p></div><div id="scanHistory" class="scan-history"></div></aside>
+      </div>`;
   };
 
   Views.renderRoleGuard = function (targetRouteLabel) {
-    return (
-      pageHeading("Organizer mode required", "This page is only available to event organizers.") +
-      '<section class="ep-guard-box"><div class="guard-icon"><i class="bi bi-shield-lock"></i></div>' +
-      '<h2 class="h4">Switch to Organizer Mode</h2><p>You tried to open ' +
-      escapeHtml(targetRouteLabel) +
-      ". Switch roles to manage events, passes, and check-in.</p>" +
-      '<div class="d-flex flex-wrap gap-2"><button class="btn btn-primary" type="button" ' +
-      "data-switch-organizer>Switch to Organizer Mode</button>" +
-      '<a class="btn btn-outline-secondary" href="#attendee-pass" data-route="attendee-pass" ' +
-      'data-role="attendee">Back to My Pass</a></div></section>'
-    );
+    return `
+      ${pageHeading("Organizer access", "This page is available in Organizer mode.")}
+      <section class="access-message"><h2>Switch to Organizer mode</h2><p>Open ${escapeHtml(targetRouteLabel)} to manage events, passes, or check-in.</p><div class="form-actions"><button class="button button-primary" type="button" data-switch-organizer>Switch to Organizer</button><a class="text-button" href="#attendee-pass" data-route="attendee-pass" data-role="attendee">Back to my passes</a></div></section>`;
   };
 
   Views.renderDashboard = function (activeEventId, filters) {
     const events = window.EventPass.Store.getEvents();
-    const selectedEventId = activeEventId || (events[0] && events[0].eventId) || "";
-    const stats = window.EventPass.Store.getEventStats(selectedEventId);
+    const event = window.EventPass.Store.getEventById(activeEventId);
+    const stats = window.EventPass.Store.getEventStats(activeEventId);
     const search = String((filters && filters.search) || "");
     const activeStatus = (filters && filters.status) || "All";
-    const searchText = search.trim().toLowerCase();
-    const passes = window.EventPass.Store.getPasses(selectedEventId).filter(function (pass) {
+    const query = search.trim().toLowerCase();
+    const passes = window.EventPass.Store.getPasses(activeEventId).filter(function (pass) {
       const matchesSearch =
-        !searchText ||
+        !query ||
         [pass.attendeeName, pass.passId, pass.contact].some(function (value) {
           return String(value || "")
             .toLowerCase()
-            .includes(searchText);
+            .includes(query);
         });
-      const matchesStatus = activeStatus === "All" || pass.status === activeStatus;
-      return matchesSearch && matchesStatus;
+      return matchesSearch && (activeStatus === "All" || pass.status === activeStatus);
     });
-    const eventSelect = events
-      .map(function (event) {
-        return (
-          '<option value="' +
-          escapeHtml(event.eventId) +
-          '"' +
-          (event.eventId === selectedEventId ? " selected" : "") +
-          ">" +
-          escapeHtml(event.name) +
-          "</option>"
-        );
+    const options = events
+      .map(function (item) {
+        return `<option value="${escapeHtml(item.eventId)}"${item.eventId === activeEventId ? " selected" : ""}>${escapeHtml(item.name)}</option>`;
       })
       .join("");
-    const statusFilters = ["All", "Valid", "Used", "Revoked"]
+    const filtersHtml = ["All", "Valid", "Used", "Revoked"]
       .map(function (status) {
-        const active = status === activeStatus;
-        return (
-          '<button type="button" class="ep-filter-btn' +
-          (active ? " active" : "") +
-          '" data-status-filter="' +
-          status +
-          '" aria-pressed="' +
-          active +
-          '">' +
-          status +
-          "</button>"
-        );
+        return `<button class="filter-button${status === activeStatus ? " active" : ""}" type="button" data-status-filter="${status}" aria-pressed="${status === activeStatus}">${status}</button>`;
       })
       .join("");
     const rows = passes
       .map(function (pass) {
         const canRevoke = pass.status === "Valid";
         const canReissue = pass.status === "Valid" || pass.status === "Revoked";
-        const checkedInAt = pass.usedAt ? formatDate(pass.usedAt) : "—";
-        return (
-          "<tr><td><code>" +
-          escapeHtml(pass.passId) +
-          "</code></td><td>" +
-          escapeHtml(pass.attendeeName) +
-          "</td><td>" +
-          escapeHtml(pass.contact || "—") +
-          '</td><td><span class="status-pill status-' +
-          escapeHtml(pass.status.toLowerCase()) +
-          '">' +
-          escapeHtml(pass.status) +
-          "</span></td><td>" +
-          escapeHtml(checkedInAt) +
-          '</td><td><div class="dashboard-actions"><button class="btn btn-sm btn-outline-danger" ' +
-          'type="button" data-revoke-pass="' +
-          escapeHtml(pass.passId) +
-          '"' +
-          (canRevoke ? "" : " disabled") +
-          '>Revoke</button><button class="btn btn-sm btn-outline-primary" ' +
-          'type="button" data-reissue-pass="' +
-          escapeHtml(pass.passId) +
-          '"' +
-          (canReissue ? "" : " disabled") +
-          '>Reissue</button><button class="btn btn-sm btn-outline-secondary" ' +
-          'type="button" data-view-pass="' +
-          escapeHtml(pass.passId) +
-          '">View QR</button></div></td></tr>'
-        );
+        return `<tr><td><code>${escapeHtml(pass.passId)}</code></td><td>${escapeHtml(pass.attendeeName)}</td><td>${escapeHtml(pass.contact || "—")}</td><td>${statusPill(pass.status)}</td><td>${escapeHtml(pass.usedAt ? formatDate(pass.usedAt) : "—")}</td><td><div class="row-actions"><button class="text-button" type="button" data-revoke-pass="${escapeHtml(pass.passId)}"${canRevoke ? "" : " disabled"}>Revoke</button><button class="text-button" type="button" data-reissue-pass="${escapeHtml(pass.passId)}"${canReissue ? "" : " disabled"}>Reissue</button><button class="text-button" type="button" data-view-pass="${escapeHtml(pass.passId)}">View QR</button></div></td></tr>`;
       })
       .join("");
-    const rateWidth = Math.min(100, Math.max(0, stats.checkInRate));
-    const rowsContent =
-      rows ||
-      '<tr><td class="text-center text-secondary py-4" colspan="6">No passes match these filters.</td></tr>';
+    const recentScans = window.EventPass.Store.getScans(activeEventId)
+      .slice(0, 5)
+      .map(function (scan) {
+        const pass = window.EventPass.Store.getPassById(scan.passId);
+        return `<li><span>${escapeHtml(pass ? pass.attendeeName : scan.passId || "Unknown pass")}</span><span>${escapeHtml(scan.result)}</span><time>${escapeHtml(formatDate(scan.scannedAt))}</time></li>`;
+      })
+      .join("");
 
-    return (
-      pageHeading("Check-in Dashboard", "Track passes and attendance for your events.") +
-      '<section class="dashboard-toolbar"><div class="dashboard-event-picker"><label for="dashboardEvent" class="form-label">Event</label>' +
-      '<select class="form-select" id="dashboardEvent"' +
-      (events.length ? "" : " disabled") +
-      ">" +
-      (eventSelect || '<option value="">No events yet</option>') +
-      "</select></div>" +
-      '<button class="btn btn-primary" id="exportCsv" type="button"' +
-      (selectedEventId ? "" : " disabled") +
-      '><i class="bi bi-download me-1"></i>Export CSV</button></section>' +
-      '<section class="row g-3 dashboard-kpis" aria-label="Event summary">' +
-      '<div class="col-12 col-sm-6 col-xl-3"><article class="ep-kpi-card"><p>Total Capacity</p><strong>' +
-      stats.capacity +
-      '</strong></article></div><div class="col-12 col-sm-6 col-xl-3"><article class="ep-kpi-card">' +
-      "<p>Passes Issued</p><strong>" +
-      stats.issued +
-      "</strong><span>" +
-      stats.remaining +
-      " seats remaining</span></article></div>" +
-      '<div class="col-12 col-sm-6 col-xl-3"><article class="ep-kpi-card"><p>Checked In</p><strong>' +
-      stats.checkedIn +
-      "</strong><span>" +
-      stats.usedCount +
-      " used passes</span></article></div>" +
-      '<div class="col-12 col-sm-6 col-xl-3"><article class="ep-kpi-card"><p>Check-In Rate</p><strong>' +
-      stats.checkInRate +
-      '%</strong><div class="progress" role="progressbar" aria-label="Check-in rate" ' +
-      'aria-valuenow="' +
-      rateWidth +
-      '" aria-valuemin="0" aria-valuemax="100"><div class="progress-bar" style="width: ' +
-      rateWidth +
-      '%"></div></div></article></div></section>' +
-      '<section class="content-card dashboard-table-card"><div class="dashboard-filters"><div class="search-field">' +
-      '<label for="dashboardSearch" class="visually-hidden">Search attendee passes</label>' +
-      '<i class="bi bi-search" aria-hidden="true"></i><input class="form-control" id="dashboardSearch" ' +
-      'type="search" placeholder="Search name, pass ID, or contact" value="' +
-      escapeHtml(search) +
-      '"></div>' +
-      '<div class="ep-filter-group" role="group" aria-label="Filter by pass status">' +
-      statusFilters +
-      '</div></div><div class="table-responsive"><table class="table align-middle dashboard-table">' +
-      '<thead><tr><th scope="col">Pass ID</th><th scope="col">Attendee</th><th scope="col">Contact</th>' +
-      '<th scope="col">Status</th><th scope="col">Checked-In Time</th><th scope="col">Actions</th></tr></thead>' +
-      "<tbody>" +
-      rowsContent +
-      "</tbody></table></div></section>"
-    );
+    return `
+      ${pageHeading("Check-in dashboard", event ? event.name : "Choose an event to view its attendees.")}
+      <div class="dashboard-toolbar"><div class="form-field"><label for="dashboardEvent">Event</label><select id="dashboardEvent"${events.length ? "" : " disabled"}>${options || '<option value="">No events yet</option>'}</select></div><button class="button button-secondary" id="exportCsv" type="button"${event ? "" : " disabled"}>Export CSV</button></div>
+      <section class="summary-strip" aria-label="Event summary"><div><span>Capacity</span><strong>${stats.capacity}</strong></div><div><span>Passes issued</span><strong>${stats.issued}</strong><small>${stats.remaining} remaining</small></div><div><span>Members checked in</span><strong>${stats.checkedIn}</strong></div><div><span>Check-in rate</span><strong>${stats.checkInRate}%</strong></div></section>
+      <section class="section-block"><div class="section-heading"><div><h2>Attendees</h2><p>${passes.length} ${passes.length === 1 ? "pass" : "passes"} shown</p></div><div class="filter-group" role="group" aria-label="Filter attendees by status">${filtersHtml}</div></div><label class="visually-hidden" for="dashboardSearch">Search attendees</label><input class="search-input" id="dashboardSearch" type="search" placeholder="Search name, pass ID, or contact" value="${escapeHtml(search)}"><div class="table-responsive"><table class="table dashboard-table"><thead><tr><th scope="col">Pass ID</th><th scope="col">Attendee</th><th scope="col">Contact</th><th scope="col">Status</th><th scope="col">Checked in</th><th scope="col">Actions</th></tr></thead><tbody>${rows || '<tr><td class="empty-table" colspan="6">No attendees match your search. <button class="text-button" type="button" data-reset-filters>Clear filters</button></td></tr>'}</tbody></table></div></section>
+      <section class="section-block"><div class="section-heading"><div><h2>Recent scans</h2><p>Latest activity at the door.</p></div></div><ul class="recent-scans">${recentScans || '<li class="empty-line">No scans have been recorded for this event.</li>'}</ul></section>`;
   };
 
   Views.renderAbout = function () {
-    return (
-      pageHeading("About EventPass", "A simple event pass demo for organizers and attendees.") +
-      '<div class="row g-3"><div class="col-12 col-lg-7"><section class="content-card">' +
-      '<h2 class="h4">How single-use passes work</h2><p>Each pass carries an <code>EP1|…</code> code tied to an event and pass ID. ' +
-      "At the door, the scanner checks the code and marks a valid pass as used. A later scan is denied, which demonstrates how a second person using a copied screenshot is caught.</p>" +
-      '<h3 class="h5 mt-4">A quick evaluator walkthrough</h3><ol class="demo-steps">' +
-      "<li>Open <strong>Events</strong> and choose an event.</li><li>Use <strong>Issue passes</strong> to create a pass and view its QR code.</li>" +
-      "<li>Open <strong>Scanner</strong> and scan the code or paste it into the field. Scan it again to see the used-pass result.</li>" +
-      "<li>Open the <strong>Check-in Dashboard</strong> to filter passes, reissue a pass, or export the event CSV.</li></ol>" +
-      '</section></div><div class="col-12 col-lg-5"><section class="ep-guard-box security-card">' +
-      '<h2 class="h4">Demo Security Boundaries</h2><p>This demo stores its data in browser <code>localStorage</code>. The deterministic checksum and its salt are visible in the JavaScript, so a person can copy or recreate a pass.</p>' +
-      '<p class="mb-0">Production passes need server-side verification with a private HMAC key or a properly validated JWT, plus authenticated organizer access. This browser demo is for learning and evaluation only.</p>' +
-      "</section></div></div>"
-    );
+    return `
+      ${pageHeading("About EventPass", "A local demo for event registration and single-use check-in.")}
+      <section class="about-copy"><h2>How the pass works</h2><p>Each QR code contains an event ID, pass ID, and a demo signature. The scanner checks the signature and pass status. After a valid check-in, the pass is marked Used; scanning it again shows why entry is denied.</p><h2>Demo limits</h2><p>Events, attendee details, passes, and check-ins are stored in this browser. The checksum and salt are visible in the client-side code, so they are not secure against tampering or sharing. Production ticketing needs server-side signing, authenticated organizer access, and a shared check-in service.</p></section>`;
   };
 
   window.EventPass.Views = Views;

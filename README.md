@@ -2,9 +2,9 @@
 
 **Project ID:** PST_PD_008  
 **Team members:** Sk Ajijul Haque and Anumula Charan Tej  
-**Version:** v3.0-dashboard-polish
+**Version:** v4.0-core-scanner
 
-EventPass is a browser-based event ticketing demo for organizers and attendees. It covers event setup, single-use QR passes, door check-in, and a small event dashboard.
+EventPass is a browser-based event ticketing demo with two separate workspaces. Attendees can browse events, register, and show their own pass. Organizers can create events, track attendance, issue or replace passes, and scan QR codes at the door.
 
 ## Tech stack
 
@@ -44,15 +44,19 @@ Issue attendee passes with an `EP1|...` payload. View the generated QR code, the
 
 ### v3.0 — Dashboard polish
 
-Choose an event and review capacity, issued passes, remaining seats, check-ins, and check-in rate. Search attendees and filter by pass status. Revoke an unused pass, reissue a replacement, view a pass QR, or download the event's pass list as CSV. Organizer-only pages require Organizer mode.
+Organizer and attendee modes have separate home screens and navigation. Choose an event and review capacity, issued passes, remaining seats, check-ins, and check-in rate. Search attendees and filter by pass status. Revoke an unused pass, reissue a replacement, view a pass QR, or download the event's pass list as CSV. Each issued or replacement pass receives a new, unique pass ID and QR payload. Organizer-only pages require Organizer mode.
 
 ### About and demo guide
 
 The About page includes a short evaluator walkthrough and explains what the browser-only security model can and cannot do.
 
+### v4.0 — Attendee registration and organizer scanner
+
+Attendee mode has its own event list, registration form, and pass view. Registration checks the event capacity and avoids issuing a second pass to the same email for the same event. Organizer mode has a separate event console, attendee dashboard, and scanner with camera and manual-code entry. Each new or replacement pass gets a fresh ID and QR payload. The organizer dashboard shows issued passes, remaining capacity, check-ins, recent scans, and attendee status.
+
 ## Run locally
 
-Keep the `js` directory beside `index.html` and open `index.html` in a modern browser. The Bootstrap and icon styles, QR generator, and libraries load from CDNs, so an internet connection is needed. Camera use requires browser support, permission, and usually a secure context such as HTTPS or localhost. Manual code entry remains available if camera scanning cannot start.
+Keep the `js` directory beside `index.html`. Open `index.html` in a modern browser, or serve the folder from localhost. The Bootstrap styles, icons, and QR generator load from CDNs, so an internet connection is needed. Camera use requires browser support, permission, and a secure context such as HTTPS or localhost. Opening the file directly may block camera access; manual code entry remains available.
 
 The app stores events, passes, scans, and preferences under `eventpass_events`, `eventpass_passes`, `eventpass_scans`, and `eventpass_prefs`. If browser storage is blocked or full, the app keeps data in memory until the page is closed and displays a warning.
 

@@ -30,42 +30,66 @@
       </button>
       <a class="brand" href="#home" data-route="home"
         ><span class="brand-icon"><i class="bi bi-ticket-perforated-fill"></i></span> EventPass
-        <span class="version-badge">v3.0</span></a
+        <span class="version-badge">v4.0</span></a
       >
       <div class="role-control">
-        <span class="role-label">Viewing as</span>
-        <button
-          id="roleSwitch"
-          class="btn btn-sm btn-outline-primary"
-          type="button"
-          aria-pressed="false"
-        >
-          Event Organizer
-        </button>
+        <span id="roleCaption" class="role-label">Organizer workspace</span>
+        <div id="roleSwitch" class="role-switch" role="group" aria-label="Choose workspace">
+          <button
+            class="role-choice active"
+            type="button"
+            data-set-role="organizer"
+            aria-pressed="true"
+          >
+            <i class="bi bi-calendar2-check" aria-hidden="true"></i><span>Organizer</span>
+          </button>
+          <button class="role-choice" type="button" data-set-role="attendee" aria-pressed="false">
+            <i class="bi bi-person-badge" aria-hidden="true"></i><span>Attendee</span>
+          </button>
+        </div>
       </div>
     </header>
 
     <div class="app-frame">
       <aside class="sidebar" aria-label="Main navigation">
-        <p class="nav-heading">Workspace</p>
+        <p class="nav-heading" id="navHeading">Organizer workspace</p>
         <nav class="nav flex-column">
           <a class="nav-link" href="#home" data-route="home"><i class="bi bi-house"></i> Home</a>
-          <a class="nav-link" href="#events" data-route="events"
+          <a class="nav-link" href="#events" data-route="events" data-role-nav="organizer"
             ><i class="bi bi-calendar-event"></i> Events</a
           >
-          <a class="nav-link" href="#create-event" data-route="create-event"
+          <a
+            class="nav-link"
+            href="#create-event"
+            data-route="create-event"
+            data-role-nav="organizer"
             ><i class="bi bi-plus-circle"></i> Create event</a
           >
-          <a class="nav-link" href="#issue-passes" data-route="issue-passes"
+          <a
+            class="nav-link"
+            href="#issue-passes"
+            data-route="issue-passes"
+            data-role-nav="organizer"
             ><i class="bi bi-ticket"></i> Issue passes</a
           >
-          <a class="nav-link" href="#attendee-pass" data-route="attendee-pass"
-            ><i class="bi bi-person-badge"></i> Attendee pass</a
+          <a
+            class="nav-link"
+            href="#attendee-pass"
+            data-route="attendee-pass"
+            data-role-nav="attendee"
+            ><i class="bi bi-person-badge"></i> My passes</a
           >
-          <a class="nav-link" href="#scanner" data-route="scanner"
+          <a
+            class="nav-link"
+            href="#browse-events"
+            data-route="browse-events"
+            data-role-nav="attendee"
+            ><i class="bi bi-calendar2-week"></i> Browse events</a
+          >
+          <a class="nav-link" href="#scanner" data-route="scanner" data-role-nav="organizer"
             ><i class="bi bi-qr-code-scan"></i> Scanner</a
           >
-          <a class="nav-link" href="#dashboard" data-route="dashboard"
+          <a class="nav-link" href="#dashboard" data-route="dashboard" data-role-nav="organizer"
             ><i class="bi bi-bar-chart"></i> Dashboard</a
           >
           <a class="nav-link" href="#about" data-route="about"
@@ -90,15 +114,47 @@
           ></button>
         </div>
         <div class="offcanvas-body">
+          <p class="nav-heading" id="mobileNavHeading">Organizer workspace</p>
           <nav class="nav flex-column">
-            <a class="nav-link" href="#home" data-route="home">Home</a
-            ><a class="nav-link" href="#events" data-route="events">Events</a>
-            <a class="nav-link" href="#create-event" data-route="create-event">Create event</a
-            ><a class="nav-link" href="#issue-passes" data-route="issue-passes">Issue passes</a>
-            <a class="nav-link" href="#attendee-pass" data-route="attendee-pass">Attendee pass</a
-            ><a class="nav-link" href="#scanner" data-route="scanner">Scanner</a>
-            <a class="nav-link" href="#dashboard" data-route="dashboard">Dashboard</a
-            ><a class="nav-link" href="#about" data-route="about">About</a>
+            <a class="nav-link" href="#home" data-route="home">Home</a>
+            <a class="nav-link" href="#events" data-route="events" data-role-nav="organizer"
+              >Events</a
+            >
+            <a
+              class="nav-link"
+              href="#create-event"
+              data-route="create-event"
+              data-role-nav="organizer"
+              >Create event</a
+            >
+            <a
+              class="nav-link"
+              href="#issue-passes"
+              data-route="issue-passes"
+              data-role-nav="organizer"
+              >Issue passes</a
+            >
+            <a
+              class="nav-link"
+              href="#attendee-pass"
+              data-route="attendee-pass"
+              data-role-nav="attendee"
+              >My passes</a
+            >
+            <a
+              class="nav-link"
+              href="#browse-events"
+              data-route="browse-events"
+              data-role-nav="attendee"
+              >Browse events</a
+            >
+            <a class="nav-link" href="#scanner" data-route="scanner" data-role-nav="organizer"
+              >QR scanner</a
+            >
+            <a class="nav-link" href="#dashboard" data-route="dashboard" data-role-nav="organizer"
+              >Dashboard</a
+            >
+            <a class="nav-link" href="#about" data-route="about">About</a>
           </nav>
         </div>
       </div>
